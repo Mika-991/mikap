@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pomodoro</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0c0a;
+    --surface: #1a1612;
+    --accent: #e8432d;
+    --accent-dim: #7a2218;
+    --cream: #f0e8d8;
+    --muted: #6b5e4e;
+    --border: #2a2218;
+    --ring-size: 280px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--cream);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.4;
+    z-index: 99;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .header { display: flex; align-items: center; gap: 16px; }
+
+  .title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 13px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .settings-gear {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .settings-gear:hover { border-color: var(--accent-dim); color: var(--cream); transform: rotate(30deg); }
+
+  .modes {
+    display: flex;
+    background: var(--surface);
+    border-radius: 4px;
+    padding: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .mode-btn {
+    background: none; border: none;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+    padding: 8px 18px;
+    cursor: pointer; border-radius: 3px;
+    transition: all 0.2s;
+  }
+  .mode-btn.active { background: var(--accent); color: var(--cream); }
+
+  .ring-container {
+    position: relative;
+    width: var(--ring-size); height: var(--ring-size);
+    cursor: pointer;
+  }
+  .ring-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-bg { fill: none; stroke: var(--surface); stroke-width: 6; }
+  .ring-progress {
+    fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke 0.4s ease;
+  }
+  .ring-inner {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+  }
+  .time-display {
+    font-family: 'DM Serif Display', serif;
+    font-size: 72px; letter-spacing: -2px; line-height: 1;
+    color: var(--cream);
+  }
+  .session-label {
+    font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .controls { display: flex; align-items: center; gap: 24px; }
+
+  .btn-icon {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted);
+    width: 44px; height: 44px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; font-size: 16px;
+  }
+  .btn-icon:hover { border-color: var(--accent-dim); color: var(--cream); }
+
+  .btn-main {
+    background: var(--accent); border: none; color: var(--cream);
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    letter-spacing: 0.3em; text-transform: uppercase;
+    padding: 16px 40px; border-radius: 4px; cursor: pointer;
+    transition: all 0.2s; min-width: 130px;
+  }
+  .btn-main:hover { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
+  .btn-main:active { transform: translateY(0); }
+
+  .sessions { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .sessions-label { font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); }
+  .dots { display: flex; gap: 8px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--border);
+    transition: all 0.3s;
+  }
+  .dot.filled {
+    background: var(--accent); border-color: var(--accent);
+    box-shadow: 0 0 8px rgba(0,0,0,0.2);
+  }
+
+  .glow {
+    position: fixed; inset: 0; pointer-events: none;
+    opacity: 0; transition: opacity 1s ease;
+  }
+  .glow.active { opacity: 1; }
+
+  /* ── SETTINGS ── */
+  .settings-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+    backdrop-filter: blur(5px);
+  }
+  .settings-overlay.open { opacity: 1; pointer-events: all; }
+
+  .settings-panel {
+    background: #141210;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 440px; max-width: 95vw;
+    max-height: 88vh; overflow-y: auto;
+    padding: 32px;
+    transform: translateY(20px);
+    transition: transform 0.3s;
+  }
+  .settings-overlay.open .settings-panel { transform: translateY(0); }
+
+  .settings-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 32px;
+  }
+  .settings-title {
+    font-family: 'DM Serif Display', serif; font-size: 20px;
+    color: var(--cream); letter-spacing: 0.03em;
+  }
+  .settings-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 20px; cursor: pointer; transition: color 0.2s; line-height: 1;
+  }
+  .settings-close:hover { color: var(--cream); }
+
+  .settings-section { margin-bottom: 28px; }
+  .settings-section-label {
+    font-size: 10.5px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 14px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+
+  .time-inputs { display: flex; gap: 12px; }
+  .time-field { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .time-field label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .time-field input[type="number"] {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--cream);
+    font-family: 'DM Mono', monospace; font-size: 20px;
+    padding: 10px 12px; width: 100%; text-align: center; outline: none;
+    transition: border-color 0.2s;
+    -moz-appearance: textfield;
+  }
+  .time-field input[type="number"]::-webkit-inner-spin-button,
+  .time-field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .time-field input[type="number"]:focus { border-color: var(--accent); }
+
+  .session-count-row { display: flex; align-items: center; gap: 12px; }
+  .session-count-row label { font-size: 12.5px; color: var(--cream); flex: 1; }
+  .stepper {
+    display: flex; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .stepper button {
+    background: none; border: none; color: var(--muted);
+    width: 36px; height: 36px; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .stepper button:hover { color: var(--cream); background: var(--border); }
+  .stepper span { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--cream); width: 32px; text-align: center; }
+
+  .color-themes { display: flex; gap: 10px; flex-wrap: wrap; }
+  .theme-swatch {
+    width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: all 0.2s; position: relative;
+  }
+  .theme-swatch:hover { transform: scale(1.15); }
+  .theme-swatch.selected { border-color: var(--cream); box-shadow: 0 0 0 3px rgba(240,232,216,0.2); }
+  .theme-swatch::after {
+    content: '✓'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: white; opacity: 0;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  }
+  .theme-swatch.selected::after { opacity: 1; }
+
+  /* Sound dropdowns */
+  .sound-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .sound-row:last-of-type { margin-bottom: 0; }
+  .sound-row-label { font-size: 12px; color: var(--cream); white-space: nowrap; min-width: 130px; }
+  .sound-select-wrapper { position: relative; flex: 1; }
+  .sound-select {
+    width: 100%; appearance: none; -webkit-appearance: none;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--cream);
+    font-family: 'DM Mono', monospace; font-size: 12px;
+    padding: 9px 30px 9px 12px; cursor: pointer; outline: none;
+    transition: border-color 0.2s;
+  }
+  .sound-select:focus, .sound-select:hover { border-color: var(--accent); }
+  .sound-select-arrow {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); pointer-events: none; font-size: 10px;
+  }
+  .sound-play-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); font-size: 11px; padding: 8px 11px;
+    border-radius: 4px; cursor: pointer; font-family: 'DM Mono', monospace;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .sound-play-btn:hover { color: var(--cream); border-color: var(--muted); }
+
+  .slider-row { display: flex; flex-direction: column; gap: 8px; }
+  .slider-row label {
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); display: flex; justify-content: space-between; align-items: center;
+  }
+  .slider-row label span { color: var(--cream); font-size: 11px; }
+  .slider-row input[type="range"] {
+    -webkit-appearance: none; width: 100%; height: 3px;
+    background: var(--border); border-radius: 2px; outline: none;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 15px; height: 15px;
+    border-radius: 50%; background: var(--accent); cursor: pointer;
+    border: 2px solid var(--bg); transition: transform 0.15s;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .toggle-row > label { font-size: 12.5px; color: var(--cream); }
+  .toggle-switch { position: relative; width: 38px; height: 20px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: var(--border); border-radius: 20px; cursor: pointer; transition: background 0.2s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute;
+    width: 14px; height: 14px; left: 3px; top: 3px;
+    background: var(--muted); border-radius: 50%; transition: all 0.2s;
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); background: white; }
+
+  .save-btn {
+    width: 100%; background: var(--accent); border: none; color: var(--cream);
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.3em;
+    text-transform: uppercase; padding: 14px; border-radius: 4px; cursor: pointer;
+    margin-top: 8px; transition: all 0.2s;
+  }
+  .save-btn:hover { filter: brightness(1.15); }
+
+  .settings-panel::-webkit-scrollbar { width: 4px; }
+  .settings-panel::-webkit-scrollbar-track { background: transparent; }
+  .settings-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .kbd {
+    display: inline-block; font-size: 9px; padding: 1px 5px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 3px; color: var(--muted); letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+
+<div class="glow" id="glow"></div>
+
+<div class="app">
+  <div class="header">
+    <div class="title">Pomodoro</div>
+    <button class="settings-gear" onclick="openSettings()" title="Settings (S)">⚙</button>
+  </div>
+
+  <div class="modes">
+    <button class="mode-btn active" data-mode="pomodoro" onclick="setMode('pomodoro')">Focus</button>
+    <button class="mode-btn" data-mode="short" onclick="setMode('short')">Short Break</button>
+    <button class="mode-btn" data-mode="long" onclick="setMode('long')">Long Break</button>
+  </div>
+
+  <div class="ring-container" onclick="toggleTimer()">
+    <svg class="ring-svg" viewBox="0 0 280 280">
+      <circle class="ring-bg" cx="140" cy="140" r="125"/>
+      <circle class="ring-progress" id="ring" cx="140" cy="140" r="125"
+        stroke-dasharray="785.4" stroke-dashoffset="0"/>
+    </svg>
+    <div class="ring-inner">
+      <div class="time-display" id="timeDisplay">25:00</div>
+      <div class="session-label" id="sessionLabel">click to start</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-icon" onclick="resetTimer()" title="Reset (R)">↺</button>
+    <button class="btn-main" id="mainBtn" onclick="toggleTimer()">Start</button>
+    <button class="btn-icon" onclick="skipSession()" title="Skip">⟶</button>
+  </div>
+
+  <div class="sessions">
+    <div class="sessions-label">Sessions today</div>
+    <div class="dots" id="dots"></div>
+    <div id="goalProgress" style="display:none; font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:var(--muted); margin-top:4px;"></div>
+  </div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="settings-overlay" id="settingsOverlay" onclick="overlayClick(event)">
+  <div class="settings-panel">
+    <div class="settings-header">
+      <div class="settings-title">Settings</div>
+      <button class="settings-close" onclick="closeSettings()">✕</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Timer Durations (minutes)</div>
+      <div class="time-inputs">
+        <div class="time-field">
+          <label>Focus</label>
+          <input type="number" id="sFocus" min="1" max="120" value="25">
+        </div>
+        <div class="time-field">
+          <label>Short Break</label>
+          <input type="number" id="sShort" min="1" max="60" value="5">
+        </div>
+        <div class="time-field">
+          <label>Long Break</label>
+          <input type="number" id="sLong" min="1" max="60" value="15">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Sessions</div>
+      <div class="session-count-row" style="margin-bottom:14px;">
+        <label>Pomodoros before long break</label>
+        <div class="stepper">
+          <button onclick="adjustSessions(-1)">−</button>
+          <span id="sessionsCount">4</span>
+          <button onclick="adjustSessions(1)">+</button>
+        </div>
+      </div>
+      <div class="session-count-row">
+        <label style="display:flex; flex-direction:column; gap:3px;">
+          <span>Session goal</span>
+          <span style="font-size:10px; color:var(--muted); font-weight:normal;">Stop automatically after this many focus sessions</span>
+        </label>
+        <div class="stepper">
+          <button onclick="adjustTarget(-1)">−</button>
+          <span id="targetCount">∞</span>
+          <button onclick="adjustTarget(1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Colour Theme</div>
+      <div class="color-themes" id="colorThemes"></div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Sounds</div>
+
+      <div class="sound-row">
+        <span class="sound-row-label">🍅 Focus done</span>
+        <div class="sound-select-wrapper">
+          <select class="sound-select" id="soundFocus"></select>
+          <span class="sound-select-arrow">▾</span>
+        </div>
+        <button class="sound-play-btn" onclick="previewSoundSelect('soundFocus')">▶</button>
+      </div>
+
+      <div class="sound-row">
+        <span class="sound-row-label">☕ Short break</span>
+        <div class="sound-select-wrapper">
+          <select class="sound-select" id="soundShort"></select>
+          <span class="sound-select-arrow">▾</span>
+        </div>
+        <button class="sound-play-btn" onclick="previewSoundSelect('soundShort')">▶</button>
+      </div>
+
+      <div class="sound-row">
+        <span class="sound-row-label">🌿 Long break</span>
+        <div class="sound-select-wrapper">
+          <select class="sound-select" id="soundLong"></select>
+          <span class="sound-select-arrow">▾</span>
+        </div>
+        <button class="sound-play-btn" onclick="previewSoundSelect('soundLong')">▶</button>
+      </div>
+
+      <div style="margin-top:18px; display:flex; flex-direction:column; gap:14px;">
+        <div class="slider-row">
+          <label>Volume <span id="volVal">70%</span></label>
+          <input type="range" id="sVolume" min="0" max="100" value="70"
+            oninput="document.getElementById('volVal').textContent=this.value+'%'">
+        </div>
+        <div class="slider-row">
+          <label>Sound Duration <span id="durVal">1.5s</span></label>
+          <input type="range" id="sSoundDur" min="5" max="50" value="15"
+            oninput="document.getElementById('durVal').textContent=(this.value/10).toFixed(1)+'s'">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Options</div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div class="toggle-row">
+          <label>Auto-start breaks after focus</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="sAutoBreak">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Auto-start focus after break</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="sAutoFocus">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label>Browser notifications</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="sNotifications" onchange="requestNotifPerm(this)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-label">Keyboard Shortcuts</div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:var(--muted);">
+        <div style="display:flex; justify-content:space-between;"><span>Start / Pause</span><span class="kbd">Space</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Reset timer</span><span class="kbd">R</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Open settings</span><span class="kbd">S</span></div>
+      </div>
+    </div>
+
+    <button class="save-btn" onclick="saveSettings()">Apply &amp; Close</button>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────
+const COLOR_THEMES = [
+  { name:'Ember',   focus:'#e8432d', dim:'#7a2218', brk:'#3d8c6e' },
+  { name:'Violet',  focus:'#8b5cf6', dim:'#4c1d95', brk:'#0ea5e9' },
+  { name:'Amber',   focus:'#f59e0b', dim:'#78350f', brk:'#3b82f6' },
+  { name:'Rose',    focus:'#e11d48', dim:'#881337', brk:'#10b981' },
+  { name:'Sky',     focus:'#0ea5e9', dim:'#0c4a6e', brk:'#f59e0b' },
+  { name:'Jade',    focus:'#10b981', dim:'#064e3b', brk:'#f97316' },
+  { name:'Indigo',  focus:'#6366f1', dim:'#312e81', brk:'#f43f5e' },
+  { name:'Slate',   focus:'#64748b', dim:'#1e293b', brk:'#a78bfa' },
+];
+
+const SOUNDS = [
+  { id:'chime',   name:'Chime — ascending tones' },
+  { id:'bell',    name:'Bell — triangle resonance' },
+  { id:'soft',    name:'Soft Pulse — gentle fade' },
+  { id:'digital', name:'Digital Beep — classic alert' },
+  { id:'zen',     name:'Zen Bowl — low harmonics' },
+];
+
+let cfg = {
+  focusMin: 25, shortMin: 5, longMin: 15,
+  sessionsPerRound: 4,
+  targetSessions: 0,   // 0 = unlimited; any positive number = stop after that many focus sessions
+  themeIndex: 0,
+  focusSound: 'chime',
+  shortSound: 'soft',
+  longSound:  'zen',
+  volume: 0.7,
+  soundDur: 1.5,
+  autoBreak: false, autoFocus: false, notifications: false,
+};
+
+let currentMode = 'pomodoro';
+let timeLeft, totalTime, running = false, interval = null, completedSessions = 0;
+
+const LABELS = { pomodoro: 'Focus', short: 'Short Break', long: 'Long Break' };
+const ring = document.getElementById('ring');
+const timeDisplay = document.getElementById('timeDisplay');
+const sessionLabel = document.getElementById('sessionLabel');
+const mainBtn = document.getElementById('mainBtn');
+const glow = document.getElementById('glow');
+const C = 785.4; // circumference
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function modeSecs(mode) {
+  return (mode==='pomodoro' ? cfg.focusMin : mode==='short' ? cfg.shortMin : cfg.longMin) * 60;
+}
+
+function applyTheme(mode) {
+  const t = COLOR_THEMES[cfg.themeIndex];
+  const color = (mode||currentMode) !== 'pomodoro' ? t.brk : t.focus;
+  document.documentElement.style.setProperty('--accent', color);
+  document.documentElement.style.setProperty('--accent-dim', t.dim);
+  // Update glow
+  glow.style.background = `radial-gradient(ellipse at 50% 50%, ${color}14 0%, transparent 65%)`;
+}
+
+function renderDots() {
+  const n = cfg.sessionsPerRound;
+  const filled = completedSessions % n || (completedSessions > 0 && completedSessions % n === 0 ? n : 0);
+  const d = document.getElementById('dots');
+  d.innerHTML = Array.from({length: n}, (_,i) =>
+    `<div class="dot${i < filled ? ' filled' : ''}"></div>`
+  ).join('');
+
+  // Show goal progress if a target is set
+  const goalEl = document.getElementById('goalProgress');
+  if (cfg.targetSessions > 0) {
+    const remaining = Math.max(0, cfg.targetSessions - completedSessions);
+    goalEl.textContent = remaining > 0
+      ? `${completedSessions} / ${cfg.targetSessions} sessions`
+      : `🎉 goal reached!`;
+    goalEl.style.display = 'block';
+  } else {
+    goalEl.textContent = completedSessions > 0 ? `${completedSessions} sessions` : '';
+    goalEl.style.display = completedSessions > 0 ? 'block' : 'none';
+  }
+}
+
+function updateDisplay() {
+  const m = String(Math.floor(timeLeft/60)).padStart(2,'0');
+  const s = String(timeLeft%60).padStart(2,'0');
+  timeDisplay.textContent = `${m}:${s}`;
+  document.title = `${m}:${s} — Pomodoro`;
+}
+
+function updateRing() {
+  ring.style.strokeDashoffset = totalTime > 0 ? C * (1 - timeLeft/totalTime) : C;
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────
+function setMode(mode, autoStart=false) {
+  currentMode = mode;
+  clearInterval(interval);
+  running = false;
+  timeLeft = totalTime = modeSecs(mode);
+  updateDisplay(); updateRing();
+  mainBtn.textContent = 'Start';
+  sessionLabel.textContent = 'click to start';
+  glow.classList.remove('active');
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  applyTheme(mode);
+  if (autoStart) setTimeout(toggleTimer, 900);
+}
+
+function toggleTimer() {
+  if (running) {
+    clearInterval(interval); running = false;
+    mainBtn.textContent = 'Resume';
+    sessionLabel.textContent = 'paused';
+    glow.classList.remove('active');
+  } else {
+    running = true;
+    mainBtn.textContent = 'Pause';
+    sessionLabel.textContent = LABELS[currentMode].toLowerCase();
+    glow.classList.add('active');
+    interval = setInterval(tick, 1000);
+  }
+}
+
+function tick() {
+  timeLeft--;
+  updateDisplay(); updateRing();
+  if (timeLeft <= 0) {
+    clearInterval(interval); running = false;
+    glow.classList.remove('active');
+    mainBtn.textContent = 'Start';
+    onEnd();
+  }
+}
+
+function onEnd() {
+  const soundId = currentMode==='pomodoro' ? cfg.focusSound : currentMode==='short' ? cfg.shortSound : cfg.longSound;
+  playSound(soundId);
+  sendNotif();
+  if (currentMode === 'pomodoro') {
+    completedSessions++;
+    renderDots();
+
+    // Check if session goal reached
+    if (cfg.targetSessions > 0 && completedSessions >= cfg.targetSessions) {
+      sessionLabel.textContent = '🎉 all done!';
+      mainBtn.textContent = 'Start';
+      // Play a final flourish after normal sound
+      setTimeout(() => playSound('chime', cfg.volume, cfg.soundDur * 1.5), cfg.soundDur * 1000 + 300);
+      return; // stop — don't auto-start break
+    }
+
+    sessionLabel.textContent = '✓ done!';
+    const isLong = completedSessions % cfg.sessionsPerRound === 0;
+    if (cfg.autoBreak) setTimeout(() => setMode(isLong ? 'long' : 'short', true), 1200);
+  } else {
+    sessionLabel.textContent = '✓ break over!';
+    if (cfg.autoFocus) setTimeout(() => setMode('pomodoro', true), 1200);
+  }
+}
+
+function resetTimer() {
+  clearInterval(interval); running = false;
+  timeLeft = totalTime = modeSecs(currentMode);
+  updateDisplay(); updateRing();
+  mainBtn.textContent = 'Start';
+  sessionLabel.textContent = 'click to start';
+  glow.classList.remove('active');
+}
+
+function skipSession() {
+  clearInterval(interval); running = false;
+  if (currentMode === 'pomodoro') { completedSessions++; renderDots(); }
+  timeLeft = 0; updateRing();
+  sessionLabel.textContent = 'skipped';
+  mainBtn.textContent = 'Start';
+  glow.classList.remove('active');
+}
+
+// ── Sound ─────────────────────────────────────────────────────────────────
+function ctx() { return new (window.AudioContext||window.webkitAudioContext)(); }
+
+function playSound(id, vol, dur) {
+  id = id||cfg.focusSound; vol = vol!==undefined?vol:cfg.volume; dur = dur!==undefined?dur:cfg.soundDur;
+  try {
+    const ac = ctx();
+    ({ chime, bell, soft, digital, zen })[id]?.(ac, vol, dur);
+  } catch(e) {}
+}
+
+function note(ac, freq, type, startT, vol, attack, decay) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.connect(g); g.connect(ac.destination);
+  o.frequency.value = freq; o.type = type;
+  g.gain.setValueAtTime(0, startT);
+  g.gain.linearRampToValueAtTime(vol, startT+attack);
+  g.gain.exponentialRampToValueAtTime(0.001, startT+decay);
+  o.start(startT); o.stop(startT+decay+0.05);
+}
+
+function chime(ac, vol, dur) {
+  [523.25,659.25,783.99,1046.5].forEach((f,i) =>
+    note(ac, f, 'sine', ac.currentTime+i*(dur*0.22), vol*0.22, 0.05, dur*0.8));
+}
+function bell(ac, vol, dur) {
+  [440,880,1320].forEach((f,i) =>
+    note(ac, f, 'triangle', ac.currentTime+i*(dur*0.18), vol*0.28, 0.02, dur));
+}
+function soft(ac, vol, dur) {
+  [528,532,536].forEach((f,i) => {
+    const t = ac.currentTime+i*(dur*0.32);
+    note(ac, f, 'sine', t, vol*0.18, dur*0.35, dur*0.9);
+  });
+}
+function digital(ac, vol, dur) {
+  [880,880,1108].forEach((f,i) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.frequency.value = f; o.type = 'square';
+    const t = ac.currentTime+i*(dur*0.25);
+    g.gain.setValueAtTime(vol*0.09, t);
+    g.gain.setValueAtTime(0, t+dur*0.18);
+    o.start(t); o.stop(t+dur*0.2);
+  });
+}
+function zen(ac, vol, dur) {
+  [130,196,261,392].forEach((f,i) =>
+    note(ac, f, 'sine', ac.currentTime+i*(dur*0.28), vol*0.32, 0.12, dur*1.3));
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────
+function requestNotifPerm(el) {
+  if (el.checked) Notification.requestPermission().then(p => { if (p!=='granted') el.checked=false; });
+}
+function sendNotif() {
+  if (!cfg.notifications || Notification.permission!=='granted') return;
+  const body = currentMode==='pomodoro' ? 'Focus session complete! Time for a break.' : 'Break over — back to focus!';
+  new Notification('🍅 Pomodoro', { body, silent: true });
+}
+
+// ── Settings UI ───────────────────────────────────────────────────────────
+function buildSettings() {
+  // Swatches
+  const ct = document.getElementById('colorThemes');
+  ct.innerHTML = '';
+  COLOR_THEMES.forEach((t,i) => {
+    const sw = document.createElement('div');
+    sw.className = 'theme-swatch'+(i===cfg.themeIndex?' selected':'');
+    sw.style.background = t.focus; sw.title = t.name;
+    sw.onclick = () => {
+      ct.querySelectorAll('.theme-swatch').forEach(s=>s.classList.remove('selected'));
+      sw.classList.add('selected');
+      cfg.themeIndex = i; applyTheme();
+    };
+    ct.appendChild(sw);
+  });
+
+  // Sounds — populate select dropdowns
+  function buildSoundSelect(selectId, selectedId) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = SOUNDS.map(s =>
+      `<option value="${s.id}"${s.id===selectedId?' selected':''}>${s.name}</option>`
+    ).join('');
+  }
+  buildSoundSelect('soundFocus', cfg.focusSound);
+  buildSoundSelect('soundShort', cfg.shortSound);
+  buildSoundSelect('soundLong',  cfg.longSound);
+
+  // Values
+  document.getElementById('sFocus').value = cfg.focusMin;
+  document.getElementById('sShort').value = cfg.shortMin;
+  document.getElementById('sLong').value  = cfg.longMin;
+  document.getElementById('sessionsCount').textContent = cfg.sessionsPerRound;
+  document.getElementById('targetCount').textContent = cfg.targetSessions === 0 ? '∞' : cfg.targetSessions;
+  document.getElementById('sVolume').value = Math.round(cfg.volume*100);
+  document.getElementById('volVal').textContent = Math.round(cfg.volume*100)+'%';
+  document.getElementById('sSoundDur').value = Math.round(cfg.soundDur*10);
+  document.getElementById('durVal').textContent = cfg.soundDur.toFixed(1)+'s';
+  document.getElementById('sAutoBreak').checked = cfg.autoBreak;
+  document.getElementById('sAutoFocus').checked = cfg.autoFocus;
+  document.getElementById('sNotifications').checked = cfg.notifications;
+}
+
+function previewSoundSelect(selectId) {
+  const id = document.getElementById(selectId).value;
+  const vol = parseInt(document.getElementById('sVolume').value)/100;
+  const dur = parseInt(document.getElementById('sSoundDur').value)/10;
+  playSound(id, vol, dur);
+}
+
+function openSettings()  { buildSettings(); document.getElementById('settingsOverlay').classList.add('open'); }
+function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+function overlayClick(e) { if (e.target===document.getElementById('settingsOverlay')) closeSettings(); }
+
+function adjustSessions(d) {
+  const el = document.getElementById('sessionsCount');
+  el.textContent = Math.max(1, Math.min(12, parseInt(el.textContent)+d));
+}
+
+function adjustTarget(d) {
+  const el = document.getElementById('targetCount');
+  const cur = el.textContent === '∞' ? 0 : parseInt(el.textContent);
+  const next = Math.max(0, Math.min(20, cur + d));
+  el.textContent = next === 0 ? '∞' : next;
+}
+
+function saveSettings() {
+  cfg.focusMin        = Math.max(1, parseInt(document.getElementById('sFocus').value)||25);
+  cfg.shortMin        = Math.max(1, parseInt(document.getElementById('sShort').value)||5);
+  cfg.longMin         = Math.max(1, parseInt(document.getElementById('sLong').value)||15);
+  cfg.sessionsPerRound= parseInt(document.getElementById('sessionsCount').textContent)||4;
+  const tRaw = document.getElementById('targetCount').textContent;
+  cfg.targetSessions  = tRaw === '∞' ? 0 : (parseInt(tRaw)||0);
+  cfg.volume          = parseInt(document.getElementById('sVolume').value)/100;
+  cfg.soundDur        = parseInt(document.getElementById('sSoundDur').value)/10;
+  cfg.autoBreak       = document.getElementById('sAutoBreak').checked;
+  cfg.autoFocus       = document.getElementById('sAutoFocus').checked;
+  cfg.notifications   = document.getElementById('sNotifications').checked;
+  cfg.focusSound = document.getElementById('soundFocus').value || cfg.focusSound;
+  cfg.shortSound = document.getElementById('soundShort').value || cfg.shortSound;
+  cfg.longSound  = document.getElementById('soundLong').value  || cfg.longSound;
+  applyTheme();
+  renderDots();
+  // Reset timer with new durations
+  clearInterval(interval); running = false;
+  timeLeft = totalTime = modeSecs(currentMode);
+  updateDisplay(); updateRing();
+  mainBtn.textContent = 'Start';
+  sessionLabel.textContent = 'click to start';
+  glow.classList.remove('active');
+  closeSettings();
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (document.getElementById('settingsOverlay').classList.contains('open')) {
+    if (e.key === 'Escape') closeSettings();
+    return;
+  }
+  if (e.code==='Space') { e.preventDefault(); toggleTimer(); }
+  if (e.code==='KeyR') resetTimer();
+  if (e.code==='KeyS') openSettings();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+applyTheme();
+setMode('pomodoro');
+renderDots();
+</script>
+</body>
+</html>
